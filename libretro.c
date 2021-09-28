@@ -29,8 +29,10 @@ retro_log_printf_t log_cb;
 #endif
 #endif
 
-static int WIDTH    = 330;
-static int HEIGHT   = 410;
+static const int LFB_WIDTH = 330;//580;
+static const int LFB_HEIGHT = 410;//720;
+static int WIDTH    = LFB_WIDTH;
+static int HEIGHT   = LFB_HEIGHT;
 static float SHIFTX = 0;
 static float SHIFTY = 0;
 static float SCALEX = 1.;
@@ -68,7 +70,7 @@ static retro_input_state_t input_state_cb;
 static retro_environment_t environ_cb;
 static retro_audio_sample_t audio_cb;
 
-static unsigned char point_size;
+static unsigned char point_size = 1;
 static unsigned short framebuffer[BUFSZ];
 
 #ifdef HAS_GPU
@@ -177,15 +179,17 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    info->timing.sample_rate    = 44100;
    info->geometry.base_width   = 330;
    info->geometry.base_height  = 410;
+   info->geometry.aspect_ratio = 33.0 / 41.0;
 #if defined(_3DS) || defined(RETROFW)
    info->geometry.max_width    = 330;
    info->geometry.max_height   = 410;
+#elif defined (LFB)
+   info->geometry.max_width    = LFB_HEIGHT;
+   info->geometry.max_height   = LFB_HEIGHT;
 #else
    info->geometry.max_width    = 2048;
    info->geometry.max_height   = 2048;
 #endif
-
-   info->geometry.aspect_ratio = 33.0 / 41.0;
 }
 
 
@@ -406,7 +410,7 @@ static bool set_rendering_context(bool useHardwareContext)
       if (!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt) || !retro_init_hw_context(true))
       {
          log_cb(RETRO_LOG_INFO, "XRGB8888 is not supported or couldn't initialise HW context, using software renderer.\n");
-         enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_0RGB1555;
+         enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
          environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
          return false;
       }
@@ -414,7 +418,7 @@ static bool set_rendering_context(bool useHardwareContext)
    else
 #endif        
    {
-      enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_0RGB1555;
+      enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
       environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt);
 #ifdef HAS_GPU        
       retro_init_hw_context(false);
@@ -437,6 +441,7 @@ static void check_variables(void)
 {
    struct retro_variable var;
    struct retro_system_av_info av_info;
+   unsigned tmp;
 
 #ifdef HAS_GPU   
    var.value = NULL;
@@ -538,8 +543,8 @@ static void check_variables(void)
       {
          if (!strcmp(var.value, "1"))
          {
-            WIDTH      = 330;
-            HEIGHT     = 410;
+            WIDTH      = LFB_WIDTH;
+            HEIGHT     = LFB_HEIGHT;
             point_size = 1;
          }
          else if (!strcmp(var.value, "2"))
@@ -568,8 +573,13 @@ static void check_variables(void)
    SHIFTX = 0.5*(1-SCALEX)+get_float_variable("vecx_shift_x", 0)/2.;
    SHIFTY = 0.5*(1-SCALEY)+get_float_variable("vecx_shift_y", 0)/2.;
 
+   tmp = 3;
+   environ_cb(RETRO_ENVIRONMENT_SET_ROTATION, &tmp);
    retro_get_system_av_info(&av_info);
-   environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &av_info);
+   tmp = av_info.geometry.base_width;
+   av_info.geometry.base_width = av_info.geometry.base_height;
+   av_info.geometry.base_height = tmp;
+   environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &av_info.geometry);
 }
 
 static void fallback_log(enum retro_log_level level, const char *fmt, ...)
@@ -710,12 +720,72 @@ void retro_reset(void)
    e8910_init_sound();
 }
 
-static INLINE uint16_t RGB1555(int col)
+static INLINE uint16_t RGB565(int col)
 {
    col >>= 2;  /* Lose the bottom two bits because we are squeezing 7 bits of colour into 5. */
-   return col << 10 | col << 5 | col;
+   return col << 11 | col << 6 | col;
 }
 
+#ifdef LFB
+static INLINE void draw_point(int x, int y, uint16_t col)
+{
+   if (point_size == 1)
+   {
+      if (0 <= x && x < WIDTH && 0 <= y && y < HEIGHT)
+         framebuffer[ ((WIDTH - x - 1) * HEIGHT) + y ] = col;
+   }
+   else if (point_size == 2)
+   {
+      /* point shape:
+       * .X.
+       * XXX
+       * .X.
+       */
+      int pos = y * WIDTH + x;
+      if (0 <= x && x < WIDTH && 0 <= y && y < HEIGHT)
+         framebuffer[ pos ] = col;
+      if ( x > 0 )
+         framebuffer[ pos - 1 ] = col;
+      if ( x < WIDTH -1 )
+         framebuffer[ pos + 1 ] = col;
+      if ( y > 0)
+         framebuffer[ pos - WIDTH ] = col;
+      if ( y < HEIGHT - 1 )
+         framebuffer[ pos + WIDTH ] = col;
+   }
+   else
+   {
+      int dy, posy;
+      /* point shape: 
+       * .XX.
+       * XXXX
+       * XXXX
+       * .XX.
+       */
+
+      x--;
+      y--;
+
+      posy = y * WIDTH;
+
+      for (dy = 0 ; dy < 4 ; dy++, posy += WIDTH)
+      {
+         int y1 = y + dy;
+
+         if (0 <= y1 && y1 < HEIGHT)
+         {
+            int dx;
+            for (dx = 0 ; dx < 4 ; dx++)
+            {
+               int x1 = x + dx;
+               if (0 <= x1 && x1 < WIDTH && ( dx % 3 != 0 || dy % 3 != 0))
+                  framebuffer[ posy + x1 ] = col;
+            }
+         }
+      }
+   }
+}
+#else
 static INLINE void draw_point(int x, int y, uint16_t col)
 {
    if (point_size == 1)
@@ -774,6 +844,7 @@ static INLINE void draw_point(int x, int y, uint16_t col)
       }
    }
 }
+#endif
 
 static INLINE void draw_line(
       unsigned x0, unsigned y0,
@@ -862,9 +933,9 @@ void osint_render(void)
          y1 = ((float)vectors_draw[i].y1 / (float)ALG_MAX_Y * SCALEY + SHIFTY) * (float)HEIGHT;
 
          if (x0 - x1 == 0 && y0 - y1 == 0)
-            draw_point(x0, y0, RGB1555(intensity));
+            draw_point(x0, y0, RGB565(intensity));
          else
-            draw_line(x0, y0, x1, y1, RGB1555(intensity));
+            draw_line(x0, y0, x1, y1, RGB565(intensity));
       }
    }
 #ifdef HAS_GPU    
@@ -1256,7 +1327,7 @@ void retro_run(void)
       video_cb(ret ? RETRO_HW_FRAME_BUFFER_VALID : NULL, WIDTH, HEIGHT, 0);
    else
 #endif        
-      video_cb(framebuffer, WIDTH, HEIGHT, WIDTH * sizeof(unsigned short));
+      video_cb(framebuffer, HEIGHT, WIDTH, HEIGHT * sizeof(unsigned short));
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated)
       check_variables();

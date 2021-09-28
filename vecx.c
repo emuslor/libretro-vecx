@@ -500,10 +500,10 @@ unsigned char read8 (unsigned address)
    }
    else if (address < 0x8000) /* cartridge */
 		data = get_cart(address);
-	else
+   else
 		data = 0xff;
 
-	return data;
+   return data;
 }
 
 void write8 (unsigned address, unsigned char data)
