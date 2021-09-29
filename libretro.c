@@ -29,10 +29,15 @@ retro_log_printf_t log_cb;
 #endif
 #endif
 
-static const int LFB_WIDTH = 330;//580;
-static const int LFB_HEIGHT = 410;//720;
-static int WIDTH    = LFB_WIDTH;
-static int HEIGHT   = LFB_HEIGHT;
+#ifdef LFB
+#define PLAT_WIDTH 330
+#define PLAT_HEIGHT 410
+#else
+#define PLAT_WIDTH 330
+#define PLAT_HEIGHT 410
+#endif
+static int WIDTH    = PLAT_WIDTH;
+static int HEIGHT   = PLAT_HEIGHT;
 static float SHIFTX = 0;
 static float SHIFTY = 0;
 static float SCALEX = 1.;
@@ -58,8 +63,8 @@ static float SCALEY = 1.;
 static struct retro_hw_render_callback hw_render;
 #endif
 
-#if defined(_3DS) || defined(RETROFW)
-#define BUFSZ 135300
+#if defined(_3DS) || defined(RETROFW) || defined(LFB)
+#define BUFSZ PLAT_WIDTH * PLAT_HEIGHT
 #else
 #define BUFSZ 2164800
 #endif
@@ -177,15 +182,15 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
    memset(info, 0, sizeof(*info));
    info->timing.fps            = 50.0;
    info->timing.sample_rate    = 44100;
-   info->geometry.base_width   = 330;
-   info->geometry.base_height  = 410;
-   info->geometry.aspect_ratio = 33.0 / 41.0;
+   info->geometry.base_width   = PLAT_WIDTH;
+   info->geometry.base_height  = PLAT_HEIGHT;
+   info->geometry.aspect_ratio = (float)PLAT_WIDTH / (float)PLAT_HEIGHT;
 #if defined(_3DS) || defined(RETROFW)
-   info->geometry.max_width    = 330;
-   info->geometry.max_height   = 410;
+   info->geometry.max_width    = PLAT_WIDTH;
+   info->geometry.max_height   = PLAT_HEIGHT;
 #elif defined (LFB)
-   info->geometry.max_width    = LFB_HEIGHT;
-   info->geometry.max_height   = LFB_HEIGHT;
+   info->geometry.max_width    = PLAT_HEIGHT;
+   info->geometry.max_height   = PLAT_HEIGHT;
 #else
    info->geometry.max_width    = 2048;
    info->geometry.max_height   = 2048;
@@ -543,26 +548,26 @@ static void check_variables(void)
       {
          if (!strcmp(var.value, "1"))
          {
-            WIDTH      = LFB_WIDTH;
-            HEIGHT     = LFB_HEIGHT;
+            WIDTH      = PLAT_WIDTH;
+            HEIGHT     = PLAT_HEIGHT;
             point_size = 1;
          }
          else if (!strcmp(var.value, "2"))
          {
-            WIDTH      = 660;
-            HEIGHT     = 820;
+            WIDTH      = PLAT_WIDTH * 2;
+            HEIGHT     = PLAT_HEIGHT * 2;
             point_size = 2;
          }
          else if (!strcmp(var.value, "3"))
          {
-            WIDTH      = 990;
-            HEIGHT     = 1230;
+            WIDTH      = PLAT_WIDTH * 3;
+            HEIGHT     = PLAT_HEIGHT * 3;
             point_size = 2;
          }
          else if (!strcmp(var.value, "4"))
          {
-            WIDTH      = 1320;
-            HEIGHT     = 1640;
+            WIDTH      = PLAT_WIDTH * 4;
+            HEIGHT     = PLAT_HEIGHT * 4;
             point_size = 3;
          }
       }
@@ -1252,7 +1257,7 @@ void retro_run(void)
          alg_jch1 = 0x00;
    }
 
-   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A ))
+   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y ))
       snd_regs[14] &= ~1;
    else
       snd_regs[14] |= 1;
@@ -1262,12 +1267,12 @@ void retro_run(void)
    else
       snd_regs[14] |= 2;
 
-   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X ))
+   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L ))
       snd_regs[14] &= ~4;
    else
       snd_regs[14] |= 4;
 
-   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y ))
+   if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X ))
       snd_regs[14] &= ~8;
    else
       snd_regs[14] |= 8;
@@ -1291,7 +1296,7 @@ void retro_run(void)
          alg_jch3 = 0x00;
    }
 
-   if (input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_A ))
+   if (input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y ))
       snd_regs[14] &= ~16;
    else
       snd_regs[14] |= 16;
@@ -1301,12 +1306,12 @@ void retro_run(void)
    else
       snd_regs[14] |= 32;
 
-   if (input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X ))
+   if (input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_L ))
       snd_regs[14] &= ~64;
    else
       snd_regs[14] |= 64;
 
-   if (input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_Y ))
+   if (input_state_cb(1, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_X ))
       snd_regs[14] &= ~128;
    else
       snd_regs[14] |= 128;
